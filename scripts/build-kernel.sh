@@ -22,13 +22,24 @@ if [ "${USE_SYSTEM_CLANG:-0}" = 1 ]; then
 else
 	CLANG_DIR="$SRC/clang-$CLANG_VERSION"
 	if [ ! -x "$CLANG_DIR/bin/clang" ]; then
-		mkdir -p "$CLANG_DIR"
-		fetch "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/$CLANG_BRANCH/clang-$CLANG_VERSION.tar.gz" \
-			"$DL/clang-$CLANG_VERSION.tar.gz"
-		tar -xzf "$DL/clang-$CLANG_VERSION.tar.gz" -C "$CLANG_DIR"
+		# googlesource streams this ~2.5 GB archive and often cuts it off; verify before use
+		ARCHIVE="$DL/clang-$CLANG_VERSION.tar.gz"
+		if fetch "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/$CLANG_BRANCH/clang-$CLANG_VERSION.tar.gz" "$ARCHIVE" \
+			&& gzip -t "$ARCHIVE" 2>/dev/null; then
+			mkdir -p "$CLANG_DIR" && tar -xzf "$ARCHIVE" -C "$CLANG_DIR"
+		else
+			rm -f "$ARCHIVE" "$ARCHIVE.part"
+			warn "AOSP clang $CLANG_VERSION download failed or truncated - falling back to system clang"
+			USE_SYSTEM_CLANG=1
+		fi
 	fi
-	export PATH="$CLANG_DIR/bin:$PATH"
-	info "AOSP $(clang --version | head -1)"
+	if [ "${USE_SYSTEM_CLANG:-0}" = 1 ]; then
+		need clang ld.lld llvm-ar llvm-nm llvm-objcopy llvm-strip
+		info "system $(clang --version | head -1)"
+	else
+		export PATH="$CLANG_DIR/bin:$PATH"
+		info "AOSP $(clang --version | head -1)"
+	fi
 fi
 
 KMAKE=(make -C "$KSRC" O="$KOUT" ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- -j"${JOBS:-$(nproc)}")

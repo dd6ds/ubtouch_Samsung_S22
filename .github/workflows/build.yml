@@ -26,12 +26,15 @@ jobs:
     timeout-minutes: 360
     env:
       WORK: /mnt/work
+      # Ubuntu's clang 18 (same as the verified local Docker build); the AOSP clang
+      # archive from googlesource is ~2.5 GB and gets truncated on CI runners
+      USE_SYSTEM_CLANG: "1"
     steps:
       - name: Skip unselected device
         if: github.event_name == 'workflow_dispatch' && inputs.devices != 'both' && inputs.devices != matrix.device
         run: echo "SKIP=true" >> "$GITHUB_ENV"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: env.SKIP != 'true'
 
       - name: Free disk space
@@ -46,7 +49,7 @@ jobs:
         if: env.SKIP != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison flex libelf-dev libssl-dev lz4 cpio fakeroot e2fsprogs zstd kmod
+          sudo apt-get install -y bc bison flex libelf-dev libssl-dev lz4 cpio fakeroot e2fsprogs zstd kmod clang lld llvm
 
       - name: Kernel
         if: env.SKIP != 'true'
@@ -68,7 +71,7 @@ jobs:
           (cd $A && sha256sum * > SHA256SUMS-$D)
           ls -lh $A
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: env.SKIP != 'true'
         with:
           name: s22-ut-${{ matrix.device }}
