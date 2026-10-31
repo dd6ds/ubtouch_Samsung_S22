@@ -1,0 +1,77 @@
+name: Build kernel + ubuntu.img (S22 / S22 Ultra)
+
+# Builds the heavy, redistributable parts in the cloud. The boot images are packed
+# locally afterwards, because vendor_boot must contain firmware from your own phone:
+#   scripts/import-ci.sh <dev> <downloaded-artifact-dir>
+#   scripts/pull-templates.sh <dev>
+#   ./build.sh <dev> images pack
+on:
+  workflow_dispatch:
+    inputs:
+      devices:
+        description: "Devices (r0s, b0s or both)"
+        default: "both"
+        type: choice
+        options: [both, r0s, b0s]
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [r0s, b0s]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      WORK: /mnt/work
+    steps:
+      - name: Skip unselected device
+        if: github.event_name == 'workflow_dispatch' && inputs.devices != 'both' && inputs.devices != matrix.device
+        run: echo "SKIP=true" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+        if: env.SKIP != 'true'
+
+      - name: Free disk space
+        if: env.SKIP != 'true'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -af >/dev/null || true
+          sudo mkdir -p /mnt/work && sudo chown "$USER" /mnt/work
+          df -h / /mnt
+
+      - name: Host packages
+        if: env.SKIP != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison flex libelf-dev libssl-dev lz4 cpio fakeroot e2fsprogs zstd kmod
+
+      - name: Kernel
+        if: env.SKIP != 'true'
+        run: ./build.sh ${{ matrix.device }} kernel
+
+      - name: ubuntu.img
+        if: env.SKIP != 'true'
+        run: ./build.sh ${{ matrix.device }} rootfs
+
+      - name: Package artifacts
+        if: env.SKIP != 'true'
+        run: |
+          D=${{ matrix.device }}; A=/mnt/artifact; mkdir -p $A
+          tar -C "$WORK" -cf - \
+              kernel-obj/$D/arch/arm64/boot/Image kernel-obj/$D/dtbs-flat \
+              kernel-obj/$D/KERNELRELEASE kernel-obj/$D/.config kernel-stage/$D \
+            | zstd -T0 -19 -q -o $A/kernel-$D.tar.zst
+          zstd -T0 -10 -q "$WORK/out/$D/ubuntu.img" -o $A/ubuntu-$D.img.zst
+          (cd $A && sha256sum * > SHA256SUMS-$D)
+          ls -lh $A
+
+      - uses: actions/upload-artifact@v4
+        if: env.SKIP != 'true'
+        with:
+          name: s22-ut-${{ matrix.device }}
+          path: /mnt/artifact/*
+          retention-days: 14
+          compression-level: 0

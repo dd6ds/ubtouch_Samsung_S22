@@ -1,0 +1,7 @@
+work/
+ref/
+templates/
+backup-*/
+*.img
+*.img.zst
+*.tar.md5
