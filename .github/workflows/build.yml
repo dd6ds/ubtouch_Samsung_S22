@@ -62,7 +62,7 @@ jobs:
       - name: Package artifacts
         if: env.SKIP != 'true'
         run: |
-          D=${{ matrix.device }}; A=/mnt/artifact; mkdir -p $A
+          D=${{ matrix.device }}; A="$RUNNER_TEMP/artifact"; mkdir -p "$A"
           tar -C "$WORK" -cf - \
               kernel-obj/$D/arch/arm64/boot/Image kernel-obj/$D/dtbs-flat \
               kernel-obj/$D/KERNELRELEASE kernel-obj/$D/.config kernel-stage/$D \
@@ -75,6 +75,6 @@ jobs:
         if: env.SKIP != 'true'
         with:
           name: s22-ut-${{ matrix.device }}
-          path: /mnt/artifact/*
+          path: ${{ runner.temp }}/artifact/*
           retention-days: 14
           compression-level: 0
