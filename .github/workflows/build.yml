@@ -13,6 +13,14 @@ on:
         default: "both"
         type: choice
         options: [both, r0s, b0s]
+      release:
+        description: "Create a GitHub release after the build"
+        type: boolean
+        default: false
+      tag:
+        description: "Release tag (empty = build-<run number>)"
+        type: string
+        default: ""
   push:
     tags: ["v*"]
 
@@ -78,3 +86,56 @@ jobs:
           path: ${{ runner.temp }}/artifact/*
           retention-days: 14
           compression-level: 0
+
+  release:
+    needs: build
+    if: always() && !cancelled() && (startsWith(github.ref, 'refs/tags/v') || inputs.release)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: s22-ut-*
+          merge-multiple: true
+          path: dist
+
+      - name: Check artifacts and split files over 2 GiB
+        run: |
+          cd dist
+          ls *.zst >/dev/null 2>&1 || { echo "no build artifacts - all builds failed?"; exit 1; }
+          # GitHub release assets are limited to 2 GiB per file;
+          # scripts/import-ci.sh joins the .partNN files again
+          for f in *.zst; do
+            if [ "$(stat -c %s "$f")" -gt 2000000000 ]; then
+              split -b 1900M -d "$f" "$f.part" && rm "$f"
+            fi
+          done
+          ls -lh
+
+      - name: Create release
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then TAG="${GITHUB_REF_NAME}"; else TAG="${{ inputs.tag }}"; fi
+          [ -n "$TAG" ] || TAG="build-${{ github.run_number }}"
+          DEVS=$(ls dist/SHA256SUMS-* | sed 's|.*SHA256SUMS-||' | tr '\n' ' ')
+          cat > notes.md <<NOTES
+          Experimental Ubuntu Touch 24.04-2.x (Halium 16) build for Galaxy S22 \`r0s\` / S22 Ultra \`b0s\` (Exynos, SM-S901B / SM-S908B).
+
+          **Devices in this release:** ${DEVS}
+          **Commit:** ${GITHUB_SHA::7} · **Run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          Contains the kernel (Image, modules, dtbs) and \`ubuntu.img\` per device. The boot images are **not** included:
+          \`vendor_boot\` needs firmware from your own phone. Download the assets of your device into one folder, then:
+
+          \`\`\`
+          scripts/import-ci.sh r0s <folder>
+          scripts/pull-templates.sh r0s     # phone in LineageOS recovery
+          ./build.sh r0s images pack
+          \`\`\`
+          See README.md / README.de.md. Untested on hardware - expect to debug the first boot.
+          NOTES
+          sed -i 's/^          //' notes.md
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Ubuntu Touch S22 / S22 Ultra - $TAG" --notes-file notes.md --prerelease

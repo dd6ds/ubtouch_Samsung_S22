@@ -84,7 +84,12 @@ packed locally. Offline alternative with a stock firmware download:
 ### Option 1: GitHub Actions (recommended, your laptop disk stays free)
 
 Push this folder to a GitHub repo, run **Actions → Build kernel + ubuntu.img → Run workflow**
-(both devices, about 2 h). Download the `s22-ut-r0s` artifact, then:
+(both devices, about 40 min). Tick **Create a GitHub release** to also publish the result as a
+(pre-)release; the optional *tag* defaults to `build-<run number>`, and pushing a `v*` tag always
+creates one. Artifacts expire after 14 days, releases stay. Files over 2 GiB are split into
+`.partNN` (GitHub's limit) and joined again by `import-ci.sh`.
+
+Download the `s22-ut-r0s` artifact (or the release assets of your device into one folder), then:
 
 ```bash
 scripts/import-ci.sh r0s ~/Downloads/s22-ut-r0s

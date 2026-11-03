@@ -86,7 +86,13 @@ Boot-Images immer lokal gepackt. Offline-Alternative mit einer Stock-Firmware:
 ### Variante 1: GitHub Actions (empfohlen, spart Platz auf dem Laptop)
 
 Ordner in ein GitHub-Repo pushen, **Actions → Build kernel + ubuntu.img → Run workflow**
-(beide Geräte, ca. 2 h). Artefakt `s22-ut-r0s` herunterladen, dann:
+(beide Geräte, ca. 40 min). Mit **Create a GitHub release** wird das Ergebnis zusätzlich als
+(Pre-)Release veröffentlicht; der optionale *tag* ist standardmäßig `build-<Laufnummer>`, ein
+gepushter `v*`-Tag erzeugt immer ein Release. Artefakte verfallen nach 14 Tagen, Releases
+bleiben. Dateien über 2 GiB werden in `.partNN` geteilt (GitHub-Limit) und von `import-ci.sh`
+wieder zusammengesetzt.
+
+Artefakt `s22-ut-r0s` herunterladen (oder die Release-Dateien deines Geräts in einen Ordner), dann:
 
 ```bash
 scripts/import-ci.sh r0s ~/Downloads/s22-ut-r0s

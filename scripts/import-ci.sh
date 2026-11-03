@@ -13,6 +13,14 @@ if [ -f "$SRCA" ] && [[ "$SRCA" == *.zip ]]; then
 	unzip -q "$SRCA" -d "$X"; SRCA="$X"
 fi
 cd "$SRCA"
+# release assets over 2 GiB are split into <file>.part00, .part01, ... - join them
+for first in *.zst.part00; do
+	[ -e "$first" ] || continue
+	whole="${first%.part00}"
+	[ -e "$whole" ] && continue
+	info "joining ${whole}.part*"
+	cat "$whole".part[0-9][0-9] > "$whole"
+done
 sha256sum -c "SHA256SUMS-$DEVICE" --quiet || die "artifact checksum mismatch"
 msg "[$DEVICE] kernel, modules, dtbs -> $WORK"
 zstd -dc "kernel-$DEVICE.tar.zst" | tar -C "$WORK" -xf -
